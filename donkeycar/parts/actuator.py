@@ -1,3 +1,4 @@
+
 """
 actuators.py
 Classes to control the motors and servos. These classes 
@@ -206,6 +207,49 @@ class PWMSteering:
         time.sleep(0.3)
         self.running = False
 
+class PWMRearSteering:
+    """
+    Wrapper over a PWM motor controller to convert angles to PWM pulses.
+    """
+    LEFT_ANGLE = -1
+    RIGHT_ANGLE = 1
+
+    def __init__(self,
+                 controller=None,
+                 left_pulse=290,
+                 right_pulse=490):
+
+        self.controller = controller
+        self.left_pulse = left_pulse
+        self.right_pulse = right_pulse
+        self.pulse = dk.utils.map_range(0, self.LEFT_ANGLE, self.RIGHT_ANGLE,
+                                        self.left_pulse, self.right_pulse)
+        self.running = True
+        print('PWM Steering created')
+
+    def update(self):
+        while self.running:
+            self.controller.set_pulse(self.pulse)
+
+    def run_threaded(self, angle, throttle):
+        # map absolute angle to angle that vehicle can implement.
+        if abs(throttle) > 0.5:
+            self.pulse = dk.utils.map_range(0, self.LEFT_ANGLE, self.RIGHT_ANGLE,
+                                        self.left_pulse, self.right_pulse)
+        else:
+            self.pulse = dk.utils.map_range(angle,
+                                            self.LEFT_ANGLE, self.RIGHT_ANGLE,
+                                            self.left_pulse, self.right_pulse)
+
+    def run(self, angle):
+        self.run_threaded(angle)
+        self.controller.set_pulse(self.pulse)
+
+    def shutdown(self):
+        # set steering straight
+        self.pulse = 0
+        time.sleep(0.3)
+        self.running = False
 
 class PWMThrottle:
     """
@@ -258,6 +302,53 @@ class PWMThrottle:
         # stop vehicle
         self.run(0)
         self.running = False
+
+        
+
+class PWMBrake:
+    """
+    Wrapper over a PWM motor controller to convert angles to PWM pulses.
+    """
+    BRAKE_RELEASED = -1
+    BRAKE_ENGAGED = 1
+
+    def __init__(self,
+                 controller=None,
+                 released_pulse=280, 
+                 engaged_pulse=390):
+
+        self.controller = controller
+        self.released_pulse = released_pulse
+        self.engaged_pulse = engaged_pulse
+        self.pulse = dk.utils.map_range(-1, self.BRAKE_RELEASED, self.BRAKE_ENGAGED,
+            self.released_pulse, self.engaged_pulse)
+
+        self.running = True
+        print('PWM Brake created')
+
+    def update(self):
+        while self.running:
+            self.controller.set_pulse(self.pulse)
+
+    def run_threaded(self, brake):
+        # not a lot going on here. If there's more than a little throttle
+        # disengage the parking brake. it acts as a drivetrain lock. 
+        if abs(brake) > 0.1:
+            self.pulse = self.released_pulse
+        else:
+            self.pulse = self.engaged_pulse
+        
+
+    def run(self, brake):
+        self.run_threaded(brake)
+        self.controller.set_pulse(self.pulse)
+
+    def shutdown(self):
+        # set brake to off
+        self.pulse = self.engaged_pulse
+        time.sleep(0.3)
+        self.running = False
+
 
 
 class Adafruit_DCMotor_Hat:

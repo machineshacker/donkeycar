@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-password='jetson'
+password='jetsonjetsonjetson'
 # Get the full dir name of this script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -22,7 +22,7 @@ sudo apt-get install -y openmpi-doc openmpi-bin libopenmpi-dev libopenblas-dev
 # Install Tensorflow as system package
 sudo -H pip3 install -r requirements.txt
 #sudo -H pip3 install --pre --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v44 'tensorflow>2'
-sudo -H pip3 install --pre --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v44 tensorflow==2.2.0+nv20.6
+sudo -H pip3 install --pre --no-cahce-dir --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v44 tensorflow==2.2.0+nv20.6
 
 ########################################
 # Install PyTorch v1.7 - torchvision v0.8.1
