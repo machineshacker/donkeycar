@@ -56,12 +56,17 @@ def drive(cfg ):
 
     elif cfg.DRIVE_TRAIN_TYPE == "SERVO_ESC":
 
-        from donkeycar.parts.actuator import PCA9685, PWMSteering, PWMThrottle
+        from donkeycar.parts.actuator import PCA9685, PWMSteering, PWMRearSteering, PWMThrottle, PWMBrake
 
-        steering_controller = PCA9685(cfg.STEERING_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
-        steering = PWMSteering(controller=steering_controller,
-                                        left_pulse=cfg.STEERING_LEFT_PWM,
-                                        right_pulse=cfg.STEERING_RIGHT_PWM)
+        fsteering_controller = PCA9685(cfg.FRONT_STEERING_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
+        front_steering = PWMSteering(controller=fsteering_controller,
+                                        left_pulse=cfg.FRONT_STEERING_LEFT_PWM,
+                                        right_pulse=cfg.FRONT_STEERING_RIGHT_PWM)
+
+        rsteering_controller = PCA9685(cfg.REAR_STEERING_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
+        rear_steering = PWMRearSteering(controller=rsteering_controller,
+                                        left_pulse=cfg.REAR_STEERING_LEFT_PWM,
+                                        right_pulse=cfg.REAR_STEERING_RIGHT_PWM)
 
         throttle_controller = PCA9685(cfg.THROTTLE_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
         throttle = PWMThrottle(controller=throttle_controller,
@@ -69,12 +74,24 @@ def drive(cfg ):
                                         zero_pulse=cfg.THROTTLE_STOPPED_PWM,
                                         min_pulse=cfg.THROTTLE_REVERSE_PWM)
 
-        drive_train = dict()
-        drive_train['steering'] = steering
-        drive_train['throttle'] = throttle
+        brake_controller = PCA9685(cfg.BRAKE_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
+        brake = PWMBrake(controller=brake_controller,
+                                        engaged_pulse=cfg.BRAKE_ENGAGED_PWM,
+                                        released_pulse=cfg.BRAKE_RELEASED_PWM)
 
-        V.add(steering, inputs=['angle'], threaded=True)
+
+        drive_train = dict()
+        drive_train['steering'] = front_steering
+        drive_train['steering', 'throttle'] = rear_steering
+        drive_train['throttle'] = throttle
+        drive_train['throttle'] = brake
+
+        V.add(front_steering, inputs=['angle'], threaded=True)
+        V.add(rear_steering, inputs=['angle', 'throttle'], threaded=True)
         V.add(throttle, inputs=['throttle'], threaded=True)
+        V.add(brake, inputs=['throttle'], threaded=True)
+
+      
 
     elif cfg.DRIVE_TRAIN_TYPE == "MM1":
         from donkeycar.parts.robohat import RoboHATDriver

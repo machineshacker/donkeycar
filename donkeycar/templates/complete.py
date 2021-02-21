@@ -14,6 +14,9 @@ Options:
     --myconfig=filename     Specify myconfig file to use. 
                             [default: myconfig.py]
 """
+
+# donkeycar/donkeycar/templates/complete.py /
+
 import os
 import time
 
@@ -118,7 +121,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
             from donkeycar.parts.dgym import DonkeyGymEnv 
             cam = DonkeyGymEnv(cfg.DONKEY_SIM_PATH, host=cfg.SIM_HOST, env_name=cfg.DONKEY_GYM_ENV_NAME, conf=cfg.GYM_CONF, delay=cfg.SIM_ARTIFICIAL_LATENCY)
             threaded = True
-            inputs = ['angle', 'throttle']
+            inputs = ['angle', 'throttle', 'brake']
         elif cfg.CAMERA_TYPE == "PICAM":
             from donkeycar.parts.camera import PiCamera
             cam = PiCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, framerate=cfg.CAMERA_FRAMERATE, vflip=cfg.CAMERA_VFLIP, hflip=cfg.CAMERA_HFLIP)
@@ -178,6 +181,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         
         V.add(ctr, 
           inputs=['cam/image_array'],
+          #outputs=['user/angle', 'user/throttle', 'user/brake', 'user/mode', 'recording'],
           outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
           threaded=True)
 
@@ -188,6 +192,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         
         V.add(ctr,
           inputs=['cam/image_array', 'tub/num_records'],
+          #outputs=['user/angle', 'user/throttle', 'user/brake', 'user/mode', 'recording'],
           outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
           threaded=True)
 
@@ -422,10 +427,10 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     #Choose what inputs should change the car.
     class DriveMode:
         def run(self, mode,
-                    user_angle, user_throttle,
+                    user_angle, user_throttle, user_brake, 
                     pilot_angle, pilot_throttle):
             if mode == 'user':
-                return user_angle, user_throttle
+                return user_angle, user_throttle, user_brake
 
             elif mode == 'local_angle':
                 return pilot_angle if pilot_angle else 0.0, user_throttle
@@ -434,9 +439,9 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
                 return pilot_angle if pilot_angle else 0.0, pilot_throttle * cfg.AI_THROTTLE_MULT if pilot_throttle else 0.0
 
     V.add(DriveMode(),
-          inputs=['user/mode', 'user/angle', 'user/throttle',
+          inputs=['user/mode', 'user/angle', 'user/throttle', 'user/brake',
                   'pilot/angle', 'pilot/throttle'],
-          outputs=['angle', 'throttle'])
+          outputs=['angle', 'throttle', 'brake'])
 
 
     #to give the car a boost when starting ai mode in a race.
@@ -478,12 +483,17 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     if cfg.DONKEY_GYM or cfg.DRIVE_TRAIN_TYPE == "MOCK":
         pass
     elif cfg.DRIVE_TRAIN_TYPE == "SERVO_ESC":
-        from donkeycar.parts.actuator import PCA9685, PWMSteering, PWMThrottle
+        from donkeycar.parts.actuator import PCA9685, PWMSteering, PWMRearSteering, PWMThrottle, PWMBrake
 
-        steering_controller = PCA9685(cfg.STEERING_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
-        steering = PWMSteering(controller=steering_controller,
-                                        left_pulse=cfg.STEERING_LEFT_PWM,
-                                        right_pulse=cfg.STEERING_RIGHT_PWM)
+        fsteering_controller = PCA9685(cfg.FRONT_STEERING_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
+        front_steering = PWMSteering(controller=fsteering_controller,
+                                        left_pulse=cfg.FRONT_STEERING_LEFT_PWM,
+                                        right_pulse=cfg.FRONT_STEERING_RIGHT_PWM)
+
+        rsteering_controller = PCA9685(cfg.REAR_STEERING_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
+        rear_steering = PWMRearSteering(controller=rsteering_controller,
+                                        left_pulse=cfg.REAR_STEERING_LEFT_PWM,
+                                        right_pulse=cfg.REAR_STEERING_RIGHT_PWM)
 
         throttle_controller = PCA9685(cfg.THROTTLE_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
         throttle = PWMThrottle(controller=throttle_controller,
@@ -491,8 +501,15 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
                                         zero_pulse=cfg.THROTTLE_STOPPED_PWM,
                                         min_pulse=cfg.THROTTLE_REVERSE_PWM)
 
-        V.add(steering, inputs=['angle'], threaded=True)
+        brake_controller = PCA9685(cfg.BRAKE_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
+        brake = PWMBrake(controller=brake_controller,
+                                        engaged_pulse=cfg.BRAKE_ENGAGED_PWM,
+                                        released_pulse=cfg.BRAKE_RELEASED_PWM)
+
+        V.add(front_steering, inputs=['angle'], threaded=True)
+        V.add(rear_steering, inputs=['angle', 'throttle'], threaded=True)
         V.add(throttle, inputs=['throttle'], threaded=True)
+        V.add(brake, inputs=['throttle'], threaded=True)
 
 
     elif cfg.DRIVE_TRAIN_TYPE == "DC_STEER_THROTTLE":
@@ -503,6 +520,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
 
         V.add(steering, inputs=['angle'])
         V.add(throttle, inputs=['throttle'])
+        
 
 
     elif cfg.DRIVE_TRAIN_TYPE == "DC_TWO_WHEEL":
